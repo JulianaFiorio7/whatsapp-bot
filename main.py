@@ -1,7 +1,10 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
+from fastapi.responses import PlainTextResponse
 import os
 
 app = FastAPI()
+
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
 
 @app.get("/health")
 def health():
@@ -9,16 +12,19 @@ def health():
 
 @app.get("/webhooks/whatsapp")
 def verify_webhook(
-    hub_mode: str | None = None,
-    hub_challenge: str | None = None,
-    hub_verify_token: str | None = None,
+    hub_mode: str = Query(..., alias="hub.mode"),
+    hub_challenge: str = Query(..., alias="hub.challenge"),
+    hub_verify_token: str = Query(..., alias="hub.verify_token")
 ):
-    verify_token = os.getenv("VERIFY_TOKEN", "")
-    if hub_mode == "subscribe" and hub_verify_token == verify_token:
-        return int(hub_challenge)
-    return {"error": "verification failed"}
+    if hub_mode == "subscribe" and hub_verify_token == VERIFY_TOKEN:
+        return PlainTextResponse(hub_challenge, status_code=200)
+    else:
+        return PlainTextResponse("verification failed", status_code=403)
 
 @app.post("/webhooks/whatsapp")
-async def receive_webhook(request: Request):
-    payload = await request.json()
-    return {"ok": True, "received_keys": list(payload.keys())}
+async def webhook(request: Request):
+    try:
+        data = await request.json()
+        return {"ok": True, "received_keys": list(data.keys()) if isinstance(data, dict) else []}
+    except:
+        return {"ok": True}
